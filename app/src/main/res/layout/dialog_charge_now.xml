@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:orientation="vertical"
+              android:layout_width="match_parent"
+              android:paddingLeft="10dp"
+              android:paddingRight="10dp"
+              android:layout_height="match_parent">
+<RadioGroup
+    android:id="@+id/rg_charge_now"
+    android:layout_width="wrap_content"
+    android:layout_marginTop="20dp"
+    android:layout_height="wrap_content"
+    android:contentDescription="授权类型"
+    android:orientation="horizontal"
+>
+    <RadioButton
+        android:id="@+id/rb_this_time"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:checked="true"
+        android:text="本次授权"
+    />
+    <RadioButton
+        android:id="@+id/rb_every_time"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="长期授权"
+    />
+</RadioGroup>
+    <EditText
+        android:layout_marginTop="50dp"
+        android:id="@+id/et_gun_id"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:inputType="number"
+        android:hint="枪编号（小于等于255）"
+    />
+</LinearLayout>

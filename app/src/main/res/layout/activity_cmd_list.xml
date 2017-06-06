@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:orientation="vertical"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent">
+    <Button
+        android:id="@+id/btn_dis_connect"
+        android:layout_width="match_parent"
+        android:layout_height="35dp"
+        android:layout_marginLeft="20dp"
+        android:layout_marginRight="20dp"
+        android:layout_marginTop="5dp"
+        android:background="#d6d6d6"
+        android:text="点击连接"
+        android:textColor="#7c7c7c"
+        android:textSize="17sp" />
+    <Button
+        android:id="@+id/btn_connect"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginLeft="20dp"
+        android:layout_marginRight="20dp"
+        android:layout_marginTop="5dp"
+        android:background="#00a143"
+        android:text="点击断开"
+        android:textColor="#ffffff"
+        android:visibility="gone"
+        android:textSize="17sp" />
+<android.support.v7.widget.RecyclerView
+    android:id="@+id/list_contener"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+>
+
+</android.support.v7.widget.RecyclerView>
+</LinearLayout>
