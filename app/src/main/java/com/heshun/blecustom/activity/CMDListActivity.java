@@ -18,6 +18,8 @@ import android.support.annotation.Nullable;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -70,7 +72,7 @@ import static com.heshun.blecustom.tools.ToolsUtils.writeMsg;
  * 2017/6/5 16:20
  */
 public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemClickListener, View.OnClickListener {
-	private boolean debug=true;
+	private boolean debug = false;
 	private String TAG = "cmd_request";
 	public static final int TIME_OUT = 5;//超时时间
 	public static final int MAX_INTERVAL = 1000;//两个包最大间隔时间
@@ -93,7 +95,8 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 	private String mDeviceAddress;
 	private BluetoothLeService mBluetoothLeService;
 	private boolean mConnected = false;
-	private BluetoothGattCharacteristic mCharacteristic;//全局可读写的特征
+	private BluetoothGattCharacteristic mWriteCharacteristic;//全局可读写的特征()
+
 	// 蓝牙服务的ServiceConnection
 	private final ServiceConnection mServiceConnection = new ServiceConnection() {
 
@@ -175,13 +178,13 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 	public void onCmdClick(boolean isJump, byte cmd) {
 		if (debug) {//不对服务校验，仅调试ui和encode
 			makeCMD(cmd);
-		}else {
+		} else {
 			if (mConnected) {
-				if (mCharacteristic != null) {
+				if (mWriteCharacteristic != null) {
 					//发送（head+body）命令
 					makeCMD(cmd);
 				} else {
-					Toast.makeText(CMDListActivity.this, "此设备无可匹配UUID的特征值", Toast.LENGTH_SHORT).show();
+					Toast.makeText(CMDListActivity.this, "未配对此设备或此设备无可匹配UUID的特征值", Toast.LENGTH_SHORT).show();
 				}
 
 			} else {
@@ -208,7 +211,7 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 		dialog.show();
 		timer = new Timer();
 		// 拆分成 20B 的包发送
-		writeMsg(msgBytes, mCharacteristic, mBluetoothLeService);
+		writeMsg(msgBytes, mWriteCharacteristic, mBluetoothLeService);
 		/*new Thread(new Runnable() {
 			@Override
 			public void run() {
@@ -219,15 +222,15 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 					if (i == packCount) {
 						byte[] bytes = new byte[length % packSize == 0 ? packSize : length % packSize];
 						System.arraycopy(msg, (i - 1) * packSize, bytes, 0, bytes.length);
-						mCharacteristic.setValue(bytes);
+						mWriteCharacteristic.setValue(bytes);
 						Log.e(TAG, "第" + i + "包数据: " + Arrays.toString(bytes));
 					} else {
 						byte[] bytes = new byte[packSize];
 						System.arraycopy(msg, (i - 1) * packSize, bytes, 0, packSize);
-						mCharacteristic.setValue(bytes);
+						mWriteCharacteristic.setValue(bytes);
 						Log.e(TAG, "第" + i + "包数据: " + Arrays.toString(bytes));
 					}
-					if (!mBluetoothLeService.writeCharacteristic(mCharacteristic)) {
+					if (!mBluetoothLeService.writeCharacteristic(mWriteCharacteristic)) {
 						i--;
 					}
 				}
@@ -269,7 +272,7 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 			if (downloadPackageResponse != null) {
 				// 拆分成 20B 的包发送
 				writeMsg(ToolsUtils.getFileBlock(recive, downloadPackageResponse.getStatrIndex(),
-						downloadPackageResponse.getEndIndex()), mCharacteristic, mBluetoothLeService);
+						downloadPackageResponse.getEndIndex()), mWriteCharacteristic, mBluetoothLeService);
 			}
 		} else if (currentCMD == Head.CMD_PACKAGE_DOWNLOAD_SUCCESSFULLY) {//下载成功跳转
 			BleMessage bleMessage = new BleMessage();
@@ -287,6 +290,44 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 
 	}
 
+	private byte[] receiveDataBuffer(byte[] recive){
+		if (currentCMD != (byte) 0xFF) {//请求命令还在生效（1 超过五秒失效 2 数据接受完整失效）
+			if (lastTime != 0) {
+				if (System.currentTimeMillis() - lastTime <= MAX_INTERVAL) {//未接收完毕
+					Log.e("jcs_receive", "单次收到的数据: " + Arrays.toString(recive));
+					responseTemp = ToolsUtils.concatAll(responseTemp, recive);
+					lastTime = System.currentTimeMillis();
+				} else {//接收完毕
+					//在此处理数据
+					BaseResponseBody responseBody = new BleMessage().decodeMessage(recive);
+					if (responseBody != null) {
+						String result = responseBody.toString();
+						Intent intent = new Intent(this, CMDJumpHereActivity.class);
+						intent.putExtra("CMDCode", currentCMD);
+						intent.putExtra("result", result);
+						startActivity(intent);
+						currentCMD = (byte) 0xFF;
+						lastTime = 0;
+						if (dialog.isShowing()) {
+							dialog.dismiss();//接收完成取消弹窗
+						}
+					} else {
+						Toast.makeText(CMDListActivity.this, "响应体不完整或数据校验失败", Toast.LENGTH_SHORT).show();
+					}
+				}
+			} else {
+				responseTemp = ToolsUtils.concatAll(responseTemp, recive);
+				Log.e("jcs_receive", "单次收到的数据: " + Arrays.toString(recive));
+				lastTime = System.currentTimeMillis();
+			}
+		} else {//该条命令已失效
+			Toast.makeText(CMDListActivity.this, "请求命令已失效，请重新发送！", Toast.LENGTH_SHORT).show();
+			responseTemp = new byte[0];
+			currentCMD = (byte) 0xFF;
+			lastTime = 0;
+		}
+		return responseTemp;
+	}
 	/**
 	 * 回调数据处理部分，接收普通指令数据
 	 * 数据包大小限制20byte,分包接收两条数据间隔1秒视为数据接收完毕
@@ -354,6 +395,7 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 				Log.e(TAG, "onReceive: 开始获取服务和特征值……");
 			} else if (BluetoothLeService.ACTION_DATA_AVAILABLE.equals(action)) {
 				byte[] recive = intent.getByteArrayExtra(BluetoothLeService.EXTRA_DATA);
+				recive=new byte[]{-86, -73, 0, 0, 23, 0, 0, -5, -15, 3, -25, 3, 4, 122, -100, 0, -12, 1, 61, -59, 52, 89, -118, -59, 52, 89, 77, 0, 0, 0, 10};
 				//响应数据处理部分
 				if (currentCMD != Head.CMD_REQUEST_DOWNLOAD_PACKAGE || currentCMD != Head.CMD_PACKAGE_DOWNLOAD_SUCCESSFULLY) {
 					receiveData(recive);
@@ -393,13 +435,23 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 					if (uuid.equals("0000fff3-0000-1000-8000-00805f9b34fb")) {
 						final int charaProp = gattCharacteristic.getProperties();
 						if ((charaProp | BluetoothGattCharacteristic.PROPERTY_NOTIFY) > 0) {
-							mCharacteristic = gattCharacteristic;
+							mWriteCharacteristic = gattCharacteristic;
 							//此特征值变化的时候会启动广播通知
 							mBluetoothLeService.setCharacteristicNotification(gattCharacteristic, true);
 							break;
 
 						}
 					}
+					/*//监听fff4通道
+					if(uuid.equals("0000fff4-0000-1000-8000-00805f9b34fb")){
+						final int charaProp = gattCharacteristic.getProperties();
+						if ((charaProp | BluetoothGattCharacteristic.PROPERTY_NOTIFY) > 0) {
+							//此特征值变化的时候会启动广播通知
+							mBluetoothLeService.setCharacteristicNotification(gattCharacteristic, true);
+							break;
+
+						}
+					}*/
 					Log.e("---Characteristic层----", "displayGattServices: " + uuid);
 				}
 			} else {//end for
@@ -461,56 +513,56 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 		switch (cmd) {
 			case Head.CMD_TIME_SYNCHRONIZATION:
 				//无需参数 直接loading界面
-				Head syncHead = new Head(Head.CMD_TYPE_REQUEST, Head.CMD_TIME_SYNCHRONIZATION, Head.STATUSCODE_NORMAL, (byte) 0x00, (short) 0x00);
+				Head syncHead = new Head(Head.CMD_TIME_SYNCHRONIZATION);
 				BleMessage syncMsg = new BleMessage();
 				sendMsg(cmd, syncMsg.encodeMessage(syncHead, new TimeSyncRequest()));
 				break;
 			case Head.CMD_QUERY_SYSTEM_INFORMATION:
 				//无需参数 直接loading界面
-				Head sysInfoHead = new Head(Head.CMD_TYPE_REQUEST, Head.CMD_QUERY_SYSTEM_INFORMATION, Head.STATUSCODE_NORMAL, (byte) 0x00, (short) 0x00);
+				Head sysInfoHead = new Head(Head.CMD_QUERY_SYSTEM_INFORMATION);
 				BleMessage sysInfoMsg = new BleMessage();
 				sendMsg(cmd, sysInfoMsg.encodeMessage(sysInfoHead, new SysInfoRequest()));
 				break;
 			case Head.CMD_SET_VOLUME://音量设置--
-				Head volHead = new Head(Head.CMD_TYPE_REQUEST, Head.CMD_SET_VOLUME, Head.STATUSCODE_NORMAL, (byte) 0x00, (short) 0x00);
+				Head volHead = new Head(Head.CMD_SET_VOLUME);
 				SetVolumeRequest setVolumeRequest = new SetVolumeRequest();
 				showSetVolDialog(cmd, builder, inflater, volHead, setVolumeRequest);
 				break;
 			case Head.CMD_SET_CHARGE_MODE://充电模式
-				Head modeHead = new Head(Head.CMD_TYPE_REQUEST, Head.CMD_SET_CHARGE_MODE, Head.STATUSCODE_NORMAL, (byte) 0x00, (short) 0x00);
+				Head modeHead = new Head(Head.CMD_SET_CHARGE_MODE);
 				SetChargeModeRequest setChargeModeRequest = new SetChargeModeRequest();
 				showSetChargeModeDialog(cmd, builder, inflater, modeHead, setChargeModeRequest);
 				break;
 			case Head.CMD_CHARGE_NOW://立即充电
-				Head nowHead = new Head(Head.CMD_TYPE_REQUEST, Head.CMD_CHARGE_NOW, Head.STATUSCODE_NORMAL, (byte) 0x00, (short) 0x00);
+				Head nowHead = new Head(Head.CMD_CHARGE_NOW);
 				ChargeNowRequest chargeNowRequest = new ChargeNowRequest();
 				showChargeNowDialog(cmd, builder, inflater, nowHead, chargeNowRequest);
 				break;
 			case Head.CMD_QUERY_STATE://查询状态 --
-				Head stateHead = new Head(Head.CMD_TYPE_REQUEST, Head.CMD_QUERY_STATE, Head.STATUSCODE_NORMAL, (byte) 0x00, (short) 0x00);
+				Head stateHead = new Head(Head.CMD_QUERY_STATE);
 				GunIdRequest stateRequest = new GunIdRequest();//枪号
 				showSetGunIdDialog(cmd, "查询状态", builder, inflater, stateHead, stateRequest);
 				break;
 			case Head.CMD_END_CHARGE: //结束充电--
-				Head endHead = new Head(Head.CMD_TYPE_REQUEST, Head.CMD_END_CHARGE, Head.STATUSCODE_NORMAL, (byte) 0x00, (short) 0x00);
+				Head endHead = new Head(Head.CMD_END_CHARGE);
 				GunIdRequest endRequest = new GunIdRequest();//枪号
 				showSetGunIdDialog(cmd, "结束充电", builder, inflater, endHead, endRequest);
 				break;
 			case Head.CMD_QUERY_CHARGING_HISTORY: //历史记录--
 				//查询充电历史记录
-				Head historyHead = new Head(Head.CMD_TYPE_REQUEST, Head.CMD_QUERY_CHARGING_HISTORY, Head.STATUSCODE_NORMAL, (byte) 0x00, (short) 0x00);
+				Head historyHead = new Head(Head.CMD_QUERY_CHARGING_HISTORY);
 				//body部分需要参数
 				GunIdRequest chargeHistoryRequest = new GunIdRequest();//枪号
 
 				showSetGunIdDialog(cmd, "历史记录", builder, inflater, historyHead, chargeHistoryRequest);
 				break;
 			case Head.CMD_QUERY_CUMULATIVE_CHARGE://累计电量--
-				Head cumulativeHead = new Head(Head.CMD_TYPE_REQUEST, Head.CMD_QUERY_CUMULATIVE_CHARGE, Head.STATUSCODE_NORMAL, (byte) 0x00, (short) 0x00);
+				Head cumulativeHead = new Head(Head.CMD_QUERY_CUMULATIVE_CHARGE);
 				GunIdRequest cumulativeRequest = new GunIdRequest();//枪号
 				showSetGunIdDialog(cmd, "累计电量", builder, inflater, cumulativeHead, cumulativeRequest);
 				break;
 			case Head.CMD_START_REMOTE_UPGRADE:
-				Head remoteHead = new Head(Head.CMD_TYPE_REQUEST, Head.CMD_START_REMOTE_UPGRADE, Head.STATUSCODE_NORMAL, (byte) 0x00, (short) 0x00);
+				Head remoteHead = new Head(Head.CMD_START_REMOTE_UPGRADE);
 				RemoteUpgradeRequest remoteRequest = new RemoteUpgradeRequest();
 				showRemoteDialog(cmd, "远程升级", builder, inflater, remoteHead, remoteRequest);
 				break;
@@ -656,10 +708,35 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 	private void showSetGunIdDialog(final byte cmd, String name, final AlertDialog.Builder builder, LayoutInflater inflater, final Head head, final GunIdRequest gunIdRequest) {
 		final View view = inflater.inflate(R.layout.dialog_gun_num, null);
 		final EditText editText = (EditText) view.findViewById(R.id.et_gun_id);
+		final TextView textView = (TextView) view.findViewById(R.id.tv_hex);
+		editText.addTextChangedListener(new TextWatcher() {
+			@Override
+			public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+
+			}
+
+			@Override
+			public void onTextChanged(CharSequence s, int start, int before, int count) {
+				String temp = s.toString();
+				if (s.length() != 0) {
+					if (Integer.parseInt(temp) > 255) {
+						temp=255+"";
+						editText.setText("255");
+					}
+				}
+				String hex = s.length() != 0 ? Integer.toHexString(Integer.parseInt(temp)) : "0";
+				textView.setText("十六进制编号：0x" + (hex.length() == 1 ? "0" + hex.toUpperCase() : hex.toUpperCase()));
+			}
+
+			@Override
+			public void afterTextChanged(Editable s) {
+
+			}
+		});
 		builder.setTitle(name);
 		builder.setView(view);
 		builder.setPositiveButton("确认", new DialogInterface.OnClickListener() {
-			int gunId = 0;
+			int gunId = 0x0A;
 
 			@Override
 			public void onClick(DialogInterface dialog, int which) {
@@ -907,6 +984,27 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 
 		final RadioGroup radioGroup = (RadioGroup) view.findViewById(R.id.rg_charge_now);
 		final EditText editText = (EditText) view.findViewById(R.id.et_gun_id);
+		editText.addTextChangedListener(new TextWatcher() {
+			@Override
+			public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+
+			}
+
+			@Override
+			public void onTextChanged(CharSequence s, int start, int before, int count) {
+				String temp = s.toString();
+				if (s.length() != 0) {
+					if (Integer.parseInt(temp) > 255) {
+						editText.setText("255");
+					}
+				}
+			}
+
+			@Override
+			public void afterTextChanged(Editable s) {
+
+			}
+		});
 
 		builder.setPositiveButton("确定", new DialogInterface.OnClickListener() {
 			int authorizeType;

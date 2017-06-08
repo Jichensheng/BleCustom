@@ -25,6 +25,7 @@ public class Test {
 		byte[] message=bleMessage.encodeMessage(head,chargeHistoryRequest);
 		System.out.println(Arrays.toString(message)+"\n");
 		//解码部分
+		System.out.println(Arrays.toString(makeData()));
 		ChargeHistoryResponse chargeHistoryResponse= (ChargeHistoryResponse) bleMessage.decodeMessage(makeData());
 		System.out.println(chargeHistoryResponse.toString()+"\n");
 

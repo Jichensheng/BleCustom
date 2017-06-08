@@ -1,7 +1,5 @@
 package com.heshun.blecustom.base;
 
-import android.util.Log;
-
 import com.heshun.blecustom.entity.responseBodyEntity.ChargeHistoryResponse;
 import com.heshun.blecustom.entity.responseBodyEntity.ChargeNowResponse;
 import com.heshun.blecustom.entity.responseBodyEntity.CumulativeChargeResponse;
@@ -50,7 +48,7 @@ public class BleMessage {
 	 * @return 响应体
 	 */
 	public BaseResponseBody decodeMessage(byte[] message) {
-		Log.e("jcs_decode", "收到的数据: "+Arrays.toString(message) );
+//		Log.e("jcs_decode", "收到的数据: "+Arrays.toString(message) );
 		if (message.length < 8)//完整性校验
 			return null;
 

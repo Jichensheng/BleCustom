@@ -85,6 +85,14 @@ public class Head {
 		this.flags = flags;
 	}
 
+	/**
+	 * 快速初始化请求head
+	 * @param CMD
+	 */
+	public Head(byte CMD) {
+		this(Head.CMD_TYPE_REQUEST,CMD, Head.STATUSCODE_NORMAL, (byte) 0x00, (short) 0x00);
+	}
+
 	public byte getCheckSum() {
 		return checkSum;
 	}

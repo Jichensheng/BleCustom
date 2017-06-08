@@ -5,12 +5,30 @@
               android:paddingLeft="10dp"
               android:paddingRight="10dp"
               android:layout_height="match_parent">
+    <TextView
+        android:layout_marginTop="10dp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:padding="10dp"
+        android:text="枪编号小于等于255(0xFF)"
+        android:textSize="16sp"
+        android:textColor="#898989"
+    />
+    <TextView
+        android:id="@+id/tv_hex"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="16sp"
+        android:padding="10dp"
+        android:text="十六进制枪编号：0x0A"
+
+    />
     <EditText
-        android:layout_marginTop="50dp"
+        android:layout_marginTop="5dp"
         android:id="@+id/et_gun_id"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:inputType="number"
-        android:hint="枪编号（小于等于255）"
+        android:text="10"
     />
 </LinearLayout>
