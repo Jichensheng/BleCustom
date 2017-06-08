@@ -1,5 +1,7 @@
 package com.heshun.blecustom.base;
 
+import android.util.Log;
+
 import com.heshun.blecustom.entity.responseBodyEntity.ChargeHistoryResponse;
 import com.heshun.blecustom.entity.responseBodyEntity.ChargeNowResponse;
 import com.heshun.blecustom.entity.responseBodyEntity.CumulativeChargeResponse;
@@ -26,6 +28,7 @@ import java.util.Arrays;
 public class BleMessage {
 	private byte CMDCode = 0x00;
 
+
 	/**
 	 * 编码请求体
 	 * body长度和校验不用用户管
@@ -41,13 +44,14 @@ public class BleMessage {
 	}
 
 	/**
-	 * 解码响应体,对数据进行校验，校验成功开始解码
-	 *
+	 * 解码响应体,对数据完整性及正确与否进行校验
+	 * 校验成功开始解码
 	 * @param message （head+body）
 	 * @return 响应体
 	 */
 	public BaseResponseBody decodeMessage(byte[] message) {
-		if (message.length < 8)
+		Log.e("jcs_decode", "收到的数据: "+Arrays.toString(message) );
+		if (message.length < 8)//完整性校验
 			return null;
 
 		//解析head
@@ -65,7 +69,7 @@ public class BleMessage {
 		//校验逻辑
 		byte[] bodyArrays = Arrays.copyOfRange(message, 8, message.length);
 		//checksum校验校验成功再解析
-		if (head.getCheckSum() == ToolsUtils.checkSum(head, bodyArrays)) {
+		if (head.getCheckSum() == ToolsUtils.checkSum(head, bodyArrays)) { //正确性判断
 			//解析body
 			switch (head.getCMD()) {
 				case Head.CMD_TIME_SYNCHRONIZATION://时间同步

@@ -56,4 +56,7 @@ public class CRC16 {
 		b[1] = (byte) (c & 0xFF);
 		return b;
 	}
+
+
+
 }

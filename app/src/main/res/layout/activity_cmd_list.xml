@@ -9,7 +9,7 @@
         android:layout_height="35dp"
         android:layout_marginLeft="20dp"
         android:layout_marginRight="20dp"
-        android:layout_marginTop="5dp"
+        android:layout_marginTop="10dp"
         android:background="#d6d6d6"
         android:text="点击连接"
         android:textColor="#7c7c7c"
@@ -17,16 +17,17 @@
     <Button
         android:id="@+id/btn_connect"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="35dp"
         android:layout_marginLeft="20dp"
         android:layout_marginRight="20dp"
-        android:layout_marginTop="5dp"
+        android:layout_marginTop="10dp"
         android:background="#00a143"
         android:text="点击断开"
         android:textColor="#ffffff"
         android:visibility="gone"
         android:textSize="17sp" />
 <android.support.v7.widget.RecyclerView
+    android:layout_marginTop="10dp"
     android:id="@+id/list_contener"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"

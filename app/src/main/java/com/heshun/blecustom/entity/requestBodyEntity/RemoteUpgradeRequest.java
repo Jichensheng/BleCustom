@@ -12,7 +12,7 @@ public class RemoteUpgradeRequest extends BaseRequestBody {
 	private byte signal;//客户端表示，升级程序对应的桩类型，不一致不能升级
 	private String softVsersion = "0.0.0";//软件版本号 1.00.01
 	private int packageLength;//升级包大小
-	private int checksum;//校验码CRC32
+	private byte[] checksum;//校验码CRC32
 	private int subsectionNum;//分段字节数
 
 	@Override
@@ -24,10 +24,9 @@ public class RemoteUpgradeRequest extends BaseRequestBody {
 
 		byte[] first = new byte[]{signal, versionRevise, versionSecond, versionMain};
 		byte[] packageLengths = ToolsUtils.intToByte4(packageLength);
-		byte[] checksums = ToolsUtils.intToByte4(checksum);
 		byte[] subsectionNums = ToolsUtils.intToByte4(subsectionNum);
 
-		return ToolsUtils.concatAll(first, packageLengths, checksums, subsectionNums);
+		return ToolsUtils.concatAll(first, packageLengths, checksum, subsectionNums);
 	}
 
 	/**
@@ -37,7 +36,7 @@ public class RemoteUpgradeRequest extends BaseRequestBody {
 	 * @param checksum      校验码
 	 * @param subsectionNum 分段下载字节数
 	 */
-	public RemoteUpgradeRequest(byte signal, String softVsersion, int packageLength, int checksum, int subsectionNum) {
+	public RemoteUpgradeRequest(byte signal, String softVsersion, int packageLength, byte[] checksum, int subsectionNum) {
 		this.signal = signal;
 		this.softVsersion = softVsersion;
 		this.packageLength = packageLength;
@@ -72,11 +71,11 @@ public class RemoteUpgradeRequest extends BaseRequestBody {
 		this.packageLength = packageLength;
 	}
 
-	public int getChecksum() {
+	public byte[] getChecksum() {
 		return checksum;
 	}
 
-	public void setChecksum(int checksum) {
+	public void setChecksum(byte[] checksum) {
 		this.checksum = checksum;
 	}
 

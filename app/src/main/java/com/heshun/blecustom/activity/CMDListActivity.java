@@ -10,6 +10,8 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
+import android.net.Uri;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.support.annotation.Nullable;
@@ -38,15 +40,22 @@ import com.heshun.blecustom.entity.CMDItem;
 import com.heshun.blecustom.entity.ChargeMode;
 import com.heshun.blecustom.entity.requestBodyEntity.ChargeNowRequest;
 import com.heshun.blecustom.entity.requestBodyEntity.GunIdRequest;
+import com.heshun.blecustom.entity.requestBodyEntity.RemoteUpgradeRequest;
 import com.heshun.blecustom.entity.requestBodyEntity.SetChargeModeRequest;
 import com.heshun.blecustom.entity.requestBodyEntity.SetVolumeRequest;
 import com.heshun.blecustom.entity.requestBodyEntity.SysInfoRequest;
 import com.heshun.blecustom.entity.requestBodyEntity.TimeSyncRequest;
+import com.heshun.blecustom.entity.responseBodyEntity.DownloadPackageResponse;
+import com.heshun.blecustom.entity.responseBodyEntity.DownloadSuccessfullyResponse;
+import com.heshun.blecustom.tools.FileUtils;
 import com.heshun.blecustom.tools.ToolsUtils;
 import com.heshun.blecustom.wheel.DividerItemDecoration;
 import com.heshun.blecustom.wheel.StrericWheelAdapter;
 import com.heshun.blecustom.wheel.WheelView;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
@@ -54,11 +63,14 @@ import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 
+import static com.heshun.blecustom.tools.ToolsUtils.writeMsg;
+
 /**
  * author：Jics
  * 2017/6/5 16:20
  */
 public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemClickListener, View.OnClickListener {
+	private boolean debug=true;
 	private String TAG = "cmd_request";
 	public static final int TIME_OUT = 5;//超时时间
 	public static final int MAX_INTERVAL = 1000;//两个包最大间隔时间
@@ -72,7 +84,8 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 	private Button btn_dis_connect;
 	private Button btn_connect;
 	byte[] responseTemp = new byte[0];
-
+	private boolean fileSucc = false;//文件是否加载成功
+	private byte[] fileblocks;//文件的byte流
 	// ----------- 蓝牙部分 -----------
 	public static final String EXTRAS_DEVICE_NAME = "DEVICE_NAME";
 	public static final String EXTRAS_DEVICE_ADDRESS = "DEVICE_ADDRESS";
@@ -100,6 +113,7 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 			mBluetoothLeService = null;
 		}
 	};
+	private String filePath;//文件路径
 	// ------------ END -------------
 
 
@@ -123,7 +137,9 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 		bindService(gattServiceIntent, mServiceConnection, BIND_AUTO_CREATE);
 
 		btn_dis_connect = (Button) findViewById(R.id.btn_dis_connect);
+		btn_dis_connect.setText(btn_dis_connect.getText().toString() + "( " + mDeviceName + " )");
 		btn_connect = (Button) findViewById(R.id.btn_connect);
+		btn_connect.setText(btn_connect.getText().toString() + "( " + mDeviceName + " )");
 
 		recyclerView = (RecyclerView) findViewById(R.id.list_contener);
 		recyclerView.setLayoutManager(new LinearLayoutManager(this));
@@ -136,6 +152,7 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 
 	/**
 	 * 生成列表
+	 * 可重构出去
 	 *
 	 * @return
 	 */
@@ -156,123 +173,162 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 
 	@Override
 	public void onCmdClick(boolean isJump, byte cmd) {
-		if (mConnected) {
-			//发送（head+body）命令
+		if (debug) {//不对服务校验，仅调试ui和encode
 			makeCMD(cmd);
-		} else {
-			Toast.makeText(this, "蓝牙连接已断开", Toast.LENGTH_SHORT).show();
+		}else {
+			if (mConnected) {
+				if (mCharacteristic != null) {
+					//发送（head+body）命令
+					makeCMD(cmd);
+				} else {
+					Toast.makeText(CMDListActivity.this, "此设备无可匹配UUID的特征值", Toast.LENGTH_SHORT).show();
+				}
+
+			} else {
+				Toast.makeText(this, "蓝牙未连接", Toast.LENGTH_SHORT).show();
+			}
 		}
 
-
-	/*	if (isJump) {
-			Intent intent = new Intent(this, CMDJumpHereActivity.class);
-			intent.putExtra("CMDCode", cmd);
-			startActivity(intent);
-		} else {
-
-		}*/
 	}
 
 	/**
 	 * 信息出口
+	 * 普通指令信息
 	 *
-	 * @param msg
+	 * @param msgBytes
 	 */
-	private void sendMsg(byte cmd, final byte[] msg) {
+	private void sendMsg(byte cmd, final byte[] msgBytes) {
 		currentCMD = cmd;//赋值当前命令
-		Log.e(TAG, "请求的数据: " + Arrays.toString(msg));
+		Log.e(TAG, "请求的数据: " + Arrays.toString(msgBytes));
 		loadingDialog.setTitle("等待响应数据");
 		loadingDialog.setCancelable(false);
 		loadingDialog.setView(LayoutInflater.from(this).inflate(R.layout.dialog_loading, null));
 
 		dialog = loadingDialog.create();
-
 		dialog.show();
 		timer = new Timer();
-
 		// 拆分成 20B 的包发送
-		new Thread(new Runnable() {
+		writeMsg(msgBytes, mCharacteristic, mBluetoothLeService);
+		/*new Thread(new Runnable() {
 			@Override
 			public void run() {
 				int packSize = 20;
 				int length = msg.length;
-				int packCount = length % packSize == 0 ? length / packSize : length / packSize + 1;
+				int packCount = length % packSize == 0 ? length / packSize : length / packSize + 1;//每包数据大小
 				for (int i = 1; i <= packCount; i++) {
 					if (i == packCount) {
 						byte[] bytes = new byte[length % packSize == 0 ? packSize : length % packSize];
 						System.arraycopy(msg, (i - 1) * packSize, bytes, 0, bytes.length);
 						mCharacteristic.setValue(bytes);
+						Log.e(TAG, "第" + i + "包数据: " + Arrays.toString(bytes));
 					} else {
 						byte[] bytes = new byte[packSize];
 						System.arraycopy(msg, (i - 1) * packSize, bytes, 0, packSize);
 						mCharacteristic.setValue(bytes);
+						Log.e(TAG, "第" + i + "包数据: " + Arrays.toString(bytes));
 					}
 					if (!mBluetoothLeService.writeCharacteristic(mCharacteristic)) {
 						i--;
 					}
 				}
-				//发送成功后开始计时
-				timer.schedule(new TimerTask() {
-					@Override
-					public void run() {
-						if (timeOut-- <= 0) {
-							timer.cancel();
-							runOnUiThread(new Runnable() {
-								@Override
-								public void run() {
-									dialog.dismiss();
-									Toast.makeText(CMDListActivity.this, "响应超时", Toast.LENGTH_SHORT).show();
-								}
-							});
-							currentCMD = (byte) 0xFF;//还原当前命令
-							timeOut = TIME_OUT;
-						}
-					}
-				}, 1000, 1000);
+
 			}
-		}).start();
+		}).start();*/
+		//发送成功后开始计时
+		timer.schedule(new TimerTask() {
+			@Override
+			public void run() {
+				if (timeOut-- <= 0) {
+					timer.cancel();
+					runOnUiThread(new Runnable() {
+						@Override
+						public void run() {
+							dialog.dismiss();
+							Toast.makeText(CMDListActivity.this, "响应超时", Toast.LENGTH_SHORT).show();
+						}
+					});
+					currentCMD = (byte) 0xFF;//还原当前命令
+					timeOut = TIME_OUT;
+				}
+			}
+		}, 1000, 1000);
+
+	}
+
+
+	/**
+	 * 接收下载指令
+	 * 解码加编码
+	 *
+	 * @param recive
+	 */
+	private void receiveDownloadCMD(byte[] recive) {
+		if (currentCMD == Head.CMD_REQUEST_DOWNLOAD_PACKAGE) {
+			BleMessage bleMessage = new BleMessage();
+			DownloadPackageResponse downloadPackageResponse = (DownloadPackageResponse) bleMessage.decodeMessage(recive);
+			if (downloadPackageResponse != null) {
+				// 拆分成 20B 的包发送
+				writeMsg(ToolsUtils.getFileBlock(recive, downloadPackageResponse.getStatrIndex(),
+						downloadPackageResponse.getEndIndex()), mCharacteristic, mBluetoothLeService);
+			}
+		} else if (currentCMD == Head.CMD_PACKAGE_DOWNLOAD_SUCCESSFULLY) {//下载成功跳转
+			BleMessage bleMessage = new BleMessage();
+			DownloadSuccessfullyResponse downloadSuccessfullyResponse = (DownloadSuccessfullyResponse) bleMessage.decodeMessage(recive);
+			if (downloadSuccessfullyResponse != null) {
+				String result = downloadSuccessfullyResponse.toString();
+				Intent intent = new Intent(this, CMDJumpHereActivity.class);
+				intent.putExtra("CMDCode", currentCMD);
+				intent.putExtra("result", result);
+				startActivity(intent);
+			} else {
+				Toast.makeText(CMDListActivity.this, "响应体不完整或数据校验失败", Toast.LENGTH_SHORT).show();
+			}
+		}
 
 	}
 
 	/**
-	 * 回调数据处理部分
+	 * 回调数据处理部分，接收普通指令数据
 	 * 数据包大小限制20byte,分包接收两条数据间隔1秒视为数据接收完毕
 	 * 超时或者接收数据完整后将请求命令设为失效 (byte)0xFF
+	 *
 	 * @param recive
 	 */
 	private void receiveData(byte[] recive) {
 		if (currentCMD != (byte) 0xFF) {//请求命令还在生效（1 超过五秒失效 2 数据接受完整失效）
 			if (lastTime != 0) {
 				if (System.currentTimeMillis() - lastTime <= MAX_INTERVAL) {//未接收完毕
+					Log.e("jcs_receive", "单次收到的数据: " + Arrays.toString(recive));
 					responseTemp = ToolsUtils.concatAll(responseTemp, recive);
 					lastTime = System.currentTimeMillis();
-				}else {//接收完毕
+				} else {//接收完毕
 					//在此处理数据
-					BaseResponseBody responseBody=new BleMessage().decodeMessage(recive);
+					BaseResponseBody responseBody = new BleMessage().decodeMessage(recive);
 					if (responseBody != null) {
 						String result = responseBody.toString();
 						Intent intent = new Intent(this, CMDJumpHereActivity.class);
 						intent.putExtra("CMDCode", currentCMD);
-						intent.putExtra("result",result);
+						intent.putExtra("result", result);
 						startActivity(intent);
-						currentCMD=(byte)0xFF;
-						lastTime=0;
+						currentCMD = (byte) 0xFF;
+						lastTime = 0;
 						if (dialog.isShowing()) {
 							dialog.dismiss();//接收完成取消弹窗
 						}
-					}else{
-						Toast.makeText(CMDListActivity.this, "响应体不完整", Toast.LENGTH_SHORT).show();
+					} else {
+						Toast.makeText(CMDListActivity.this, "响应体不完整或数据校验失败", Toast.LENGTH_SHORT).show();
 					}
 				}
 			} else {
 				responseTemp = ToolsUtils.concatAll(responseTemp, recive);
+				Log.e("jcs_receive", "单次收到的数据: " + Arrays.toString(recive));
 				lastTime = System.currentTimeMillis();
 			}
-		}else{//该条命令已失效
+		} else {//该条命令已失效
 			Toast.makeText(CMDListActivity.this, "请求命令已失效，请重新发送！", Toast.LENGTH_SHORT).show();
-			responseTemp=new byte[0];
-			currentCMD=(byte)0xFF;
-			lastTime=0;
+			responseTemp = new byte[0];
+			currentCMD = (byte) 0xFF;
+			lastTime = 0;
 		}
 
 	}
@@ -295,12 +351,20 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 			} else if (BluetoothLeService.ACTION_GATT_SERVICES_DISCOVERED.equals(action)) {
 				// 获取所有服务通道部分
 				displayGattServices(mBluetoothLeService.getSupportedGattServices());
+				Log.e(TAG, "onReceive: 开始获取服务和特征值……");
 			} else if (BluetoothLeService.ACTION_DATA_AVAILABLE.equals(action)) {
 				byte[] recive = intent.getByteArrayExtra(BluetoothLeService.EXTRA_DATA);
 				//响应数据处理部分
-				receiveData(recive);
+				if (currentCMD != Head.CMD_REQUEST_DOWNLOAD_PACKAGE || currentCMD != Head.CMD_PACKAGE_DOWNLOAD_SUCCESSFULLY) {
+					receiveData(recive);
+				} else {
+					receiveDownloadCMD(recive);
+				}
+
+
 			}
 		}
+
 	};
 
 	/**
@@ -347,6 +411,7 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 
 	/**
 	 * 广播过滤器
+	 *
 	 * @return
 	 */
 	private static IntentFilter makeGattUpdateIntentFilter() {
@@ -357,6 +422,7 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 		intentFilter.addAction(BluetoothLeService.ACTION_DATA_AVAILABLE);
 		return intentFilter;
 	}
+
 	@Override
 	protected void onResume() {
 		super.onResume();
@@ -444,8 +510,137 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 				showSetGunIdDialog(cmd, "累计电量", builder, inflater, cumulativeHead, cumulativeRequest);
 				break;
 			case Head.CMD_START_REMOTE_UPGRADE:
+				Head remoteHead = new Head(Head.CMD_TYPE_REQUEST, Head.CMD_START_REMOTE_UPGRADE, Head.STATUSCODE_NORMAL, (byte) 0x00, (short) 0x00);
+				RemoteUpgradeRequest remoteRequest = new RemoteUpgradeRequest();
+				showRemoteDialog(cmd, "远程升级", builder, inflater, remoteHead, remoteRequest);
 				break;
 		}
+	}
+
+	/**
+	 * 远程升级
+	 *
+	 * @param cmd
+	 * @param name
+	 * @param builder
+	 * @param inflater
+	 * @param remoteHead
+	 * @param remoteRequest
+	 */
+	private void showRemoteDialog(final byte cmd, String name, AlertDialog.Builder builder,
+								  LayoutInflater inflater, final Head remoteHead, final RemoteUpgradeRequest remoteRequest) {
+		final View view = inflater.inflate(R.layout.dialog_remote_update, null);
+		builder.setTitle(name);
+		builder.setView(view);
+		final EditText et_signal = (EditText) view.findViewById(R.id.et_signal);
+		final EditText et_softVsersion = (EditText) view.findViewById(R.id.et_softVsersion);
+		final EditText et_subsectionNum = (EditText) view.findViewById(R.id.et_subsectionNum);
+		Button btn_file = (Button) view.findViewById(R.id.btn_file);
+		btn_file.setOnClickListener(new View.OnClickListener() {
+			@Override
+			public void onClick(View v) {
+				FileUtils.showFileChooser(CMDListActivity.this);
+			}
+		});
+
+		builder.setPositiveButton("确认", new DialogInterface.OnClickListener() {
+			byte signal;//客户端表示，升级程序对应的桩类型，不一致不能升级
+			String softVsersion = "0.0.0";//软件版本号 1.00.01
+			int packageLength;//升级包大小
+			byte[] checksum;
+			int subsectionNum;//分段字节数
+
+			@Override
+			public void onClick(DialogInterface dialog, int which) {
+				if (fileblocks != null) {
+					//获取文件块 ，文件块在onActivityResult回调中初始化
+					checksum = ToolsUtils.fileCRC32(fileblocks);
+					signal = (byte) Integer.parseInt(et_signal.getText().toString());
+					softVsersion = et_softVsersion.getText().toString();
+					packageLength = fileblocks.length;
+					subsectionNum = Integer.parseInt(et_subsectionNum.getText().toString());
+
+					BleMessage bleMessage = new BleMessage();
+					remoteRequest.setChecksum(checksum);
+					remoteRequest.setSignal(signal);
+					remoteRequest.setPackageLength(packageLength);
+					remoteRequest.setSubsectionNum(subsectionNum);
+					remoteRequest.setSoftVsersion(softVsersion);
+					sendMsg(cmd, bleMessage.encodeMessage(remoteHead, remoteRequest));
+				} else {
+					Toast.makeText(CMDListActivity.this, "文件获取失败", Toast.LENGTH_SHORT).show();
+				}
+				dialog.dismiss();
+			}
+		});
+		builder.setNegativeButton("取消", new DialogInterface.OnClickListener() {
+			@Override
+			public void onClick(DialogInterface dialog, int which) {
+				dialog.dismiss();
+			}
+		});
+		builder.create().show();
+
+	}
+
+	/**
+	 * 异步加载文件
+	 * 给文件块赋值
+	 */
+	public class FileTask extends AsyncTask<String, Void, Integer> {
+		static final int ERROR_FILE = 1;
+		static final int SUCC = 2;
+
+		@Override
+		protected Integer doInBackground(String... strings) {
+
+			try {
+				File file = new File(strings[0]);
+				InputStream inputStream = new FileInputStream(file);
+				fileblocks = ToolsUtils.inputStreamTOByte(file, inputStream);
+				inputStream.close();
+			} catch (Exception e) {
+				e.printStackTrace();
+				return ERROR_FILE;
+			}
+			return SUCC;
+		}
+
+		@Override
+		protected void onPostExecute(Integer flag) {
+			switch (flag) {
+				case ERROR_FILE:
+					//文件打开失败
+					fileSucc = false;
+					break;
+				case SUCC:
+					fileSucc = true;
+					//加载成功逻辑
+					break;
+			}
+		}
+	}
+
+	/**
+	 * 文件选择器回调
+	 *
+	 * @param requestCode
+	 * @param resultCode
+	 * @param data
+	 */
+	@Override
+	protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+		switch (requestCode) {
+			case FileUtils.FILE_SELECT_CODE:
+				if (resultCode == RESULT_OK) {
+					Uri uri = data.getData();
+					filePath = FileUtils.getPath(this, uri);
+					//异步加载文件
+					new FileTask().execute(filePath);
+				}
+				break;
+		}
+		super.onActivityResult(requestCode, resultCode, data);
 	}
 
 	/**
@@ -475,17 +670,17 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 					gunIdRequest.setId(gunId);
 					sendMsg(cmd, bleMessage.encodeMessage(head, gunIdRequest));
 
-					builder.create().dismiss();
+					dialog.dismiss();
 				} else {
 					Toast.makeText(CMDListActivity.this, "输入枪编号", Toast.LENGTH_SHORT).show();
 				}
-				builder.create().dismiss();
+				dialog.dismiss();
 			}
 		});
 		builder.setNegativeButton("取消", new DialogInterface.OnClickListener() {
 			@Override
 			public void onClick(DialogInterface dialog, int which) {
-				builder.create().dismiss();
+				dialog.dismiss();
 			}
 		});
 		builder.create().show();
@@ -534,14 +729,14 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 				setVolumeRequest.setVolume(vol);
 				sendMsg(cmd, bleMessage.encodeMessage(volHead, setVolumeRequest));
 
-				builder.create().dismiss();
+				dialog.dismiss();
 			}
 		});
 		//取消按钮
 		builder.setNegativeButton("取消", new DialogInterface.OnClickListener() {
 			@Override
 			public void onClick(DialogInterface dialog, int which) {
-				builder.create().dismiss();
+				dialog.dismiss();
 			}
 		});
 		builder.create().show();
@@ -672,9 +867,6 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 						endMinute = 0;
 						break;
 				}
-
-
-				//Todo 发送业务
 				BleMessage bleMessage = new BleMessage();
 				setChargeModeRequest.setChargeMode(chargeMode.getMode());
 				setChargeModeRequest.setStartH(startHour);
@@ -682,7 +874,7 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 				setChargeModeRequest.setEndH(endHour);
 				setChargeModeRequest.setEndM(endMinute);
 				sendMsg(cmd, bleMessage.encodeMessage(modeHead, setChargeModeRequest));
-				builder.create().dismiss();
+				dialog.dismiss();
 			}
 		});
 
@@ -691,7 +883,7 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 			@Override
 			public void onClick(DialogInterface dialog, int which) {
 
-				builder.create().dismiss();
+				dialog.dismiss();
 			}
 		});
 		builder.create().show();
@@ -737,7 +929,7 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 					chargeNowRequest.setAuthorizeType(authorizeType);
 					chargeNowRequest.setId(id);
 					sendMsg(cmd, bleMessage.encodeMessage(nowHead, chargeNowRequest));
-					builder.create().dismiss();
+					dialog.dismiss();
 				} else {
 					Toast.makeText(CMDListActivity.this, "输入枪编号", Toast.LENGTH_SHORT).show();
 				}
@@ -748,7 +940,7 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 			@Override
 			public void onClick(DialogInterface dialog, int which) {
 
-				builder.create().dismiss();
+				dialog.dismiss();
 			}
 		});
 		builder.create().show();
