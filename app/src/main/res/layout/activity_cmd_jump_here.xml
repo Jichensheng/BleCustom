@@ -4,17 +4,13 @@
               android:layout_height="match_parent"
               android:orientation="vertical">
     <!--fragment替换对象-->
-    <LinearLayout
-        android:id="@+id/replice_contener"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="vertical"
-    />
     <TextView
         android:id="@+id/tv_response"
         android:padding="50dp"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:textColor="#606060"
+        android:textSize="16sp"
         android:text="返回信息"
     />
 </LinearLayout>

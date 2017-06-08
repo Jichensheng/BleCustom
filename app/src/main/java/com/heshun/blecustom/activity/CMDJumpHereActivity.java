@@ -7,6 +7,7 @@ import android.support.v7.app.AppCompatActivity;
 import android.widget.TextView;
 
 import com.heshun.blecustom.R;
+import com.heshun.blecustom.tools.ToolsUtils;
 
 
 /**
@@ -21,9 +22,11 @@ public class CMDJumpHereActivity extends AppCompatActivity {
 		setContentView(R.layout.activity_cmd_jump_here);
 		Intent intent=getIntent();
 		String CMDCode=intent.getStringExtra("CMDCode");
+
 		String result=intent.getStringExtra("result");
 		textView= (TextView) findViewById(R.id.tv_response);
-		textView.setText("当前指令为:"+CMDCode+"\n"+result);
+		textView.setText("当前指令为:"+ ToolsUtils.byteStringToHex(CMDCode)+"\n\n"+result);
 
 	}
+
 }

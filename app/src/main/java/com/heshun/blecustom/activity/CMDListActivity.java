@@ -75,8 +75,6 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 	private boolean debug = false;
 	private String TAG = "cmd_request";
 	public static final int TIME_OUT = 5;//超时时间
-	public static final int MAX_INTERVAL = 1000;//两个包最大间隔时间
-	private long lastTime = 0;
 	private RecyclerView recyclerView;
 	private AlertDialog.Builder loadingDialog;
 	private AlertDialog dialog;
@@ -85,10 +83,14 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 	private byte currentCMD = (byte) 0xFF;
 	private Button btn_dis_connect;
 	private Button btn_connect;
-	byte[] responseTemp = new byte[0];
 	private boolean fileSucc = false;//文件是否加载成功
+	private boolean isDownloadding = false;//是否有下载任务
 	private byte[] fileblocks;//文件的byte流
 	// ----------- 蓝牙部分 -----------
+	private boolean isTiming = false;//是否正在计时
+	byte[] responseBuffer = new byte[0];//接收数据buff
+
+
 	public static final String EXTRAS_DEVICE_NAME = "DEVICE_NAME";
 	public static final String EXTRAS_DEVICE_ADDRESS = "DEVICE_ADDRESS";
 	private String mDeviceName;
@@ -179,17 +181,22 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 		if (debug) {//不对服务校验，仅调试ui和encode
 			makeCMD(cmd);
 		} else {
-			if (mConnected) {
-				if (mWriteCharacteristic != null) {
-					//发送（head+body）命令
-					makeCMD(cmd);
-				} else {
-					Toast.makeText(CMDListActivity.this, "未配对此设备或此设备无可匹配UUID的特征值", Toast.LENGTH_SHORT).show();
-				}
+			if (isDownloadding) {//远程升级过程中不允许其他操作
+				Toast.makeText(CMDListActivity.this, "远程升级过程中不允许其他操作", Toast.LENGTH_SHORT).show();
+			}else {
+				if (mConnected) {
+					if (mWriteCharacteristic != null) {
+						//发送（head+body）命令
+						makeCMD(cmd);
+					} else {
+						Toast.makeText(CMDListActivity.this, "未配对此设备或此设备无可匹配UUID的特征值", Toast.LENGTH_SHORT).show();
+					}
 
-			} else {
-				Toast.makeText(this, "蓝牙未连接", Toast.LENGTH_SHORT).show();
+				} else {
+					Toast.makeText(this, "蓝牙未连接", Toast.LENGTH_SHORT).show();
+				}
 			}
+
 		}
 
 	}
@@ -197,63 +204,67 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 	/**
 	 * 信息出口
 	 * 普通指令信息
+	 * 响应数据处理，接收普通指令数据
+	 * 数据包大小限制20byte,分包接收两条数据间隔1秒视为数据接收完毕
+	 * 超时或者接收数据完整后将请求命令设为失效 (byte)0xFF
 	 *
 	 * @param msgBytes
 	 */
 	private void sendMsg(byte cmd, final byte[] msgBytes) {
 		currentCMD = cmd;//赋值当前命令
 		Log.e(TAG, "请求的数据: " + Arrays.toString(msgBytes));
-		loadingDialog.setTitle("等待响应数据");
+		loadingDialog.setTitle("数据接收中");
 		loadingDialog.setCancelable(false);
 		loadingDialog.setView(LayoutInflater.from(this).inflate(R.layout.dialog_loading, null));
 
 		dialog = loadingDialog.create();
 		dialog.show();
-		timer = new Timer();
+		timer = new Timer();//初始化计时器
+		isTiming = true;//开始计时，等待广播发送相应数据
 		// 拆分成 20B 的包发送
 		writeMsg(msgBytes, mWriteCharacteristic, mBluetoothLeService);
-		/*new Thread(new Runnable() {
-			@Override
-			public void run() {
-				int packSize = 20;
-				int length = msg.length;
-				int packCount = length % packSize == 0 ? length / packSize : length / packSize + 1;//每包数据大小
-				for (int i = 1; i <= packCount; i++) {
-					if (i == packCount) {
-						byte[] bytes = new byte[length % packSize == 0 ? packSize : length % packSize];
-						System.arraycopy(msg, (i - 1) * packSize, bytes, 0, bytes.length);
-						mWriteCharacteristic.setValue(bytes);
-						Log.e(TAG, "第" + i + "包数据: " + Arrays.toString(bytes));
-					} else {
-						byte[] bytes = new byte[packSize];
-						System.arraycopy(msg, (i - 1) * packSize, bytes, 0, packSize);
-						mWriteCharacteristic.setValue(bytes);
-						Log.e(TAG, "第" + i + "包数据: " + Arrays.toString(bytes));
-					}
-					if (!mBluetoothLeService.writeCharacteristic(mWriteCharacteristic)) {
-						i--;
-					}
-				}
-
-			}
-		}).start();*/
 		//发送成功后开始计时
 		timer.schedule(new TimerTask() {
 			@Override
 			public void run() {
-				if (timeOut-- <= 0) {
-					timer.cancel();
-					runOnUiThread(new Runnable() {
-						@Override
-						public void run() {
-							dialog.dismiss();
-							Toast.makeText(CMDListActivity.this, "响应超时", Toast.LENGTH_SHORT).show();
+				if (timeOut-- <= 0) {//计时结束
+
+					timer.cancel();//取消计时器
+					isTiming = false;//重置计时标识
+					timeOut = TIME_OUT;//重置计时数据
+//					responseBuffer= DataSimulation.getHistoryData();//模拟数据
+					if (responseBuffer.length != 0) {//有数据的情况
+						BaseResponseBody responseBody = new BleMessage().decodeMessage(responseBuffer);
+						if (responseBody != null) {
+							String result = responseBody.toString();
+							Intent intent = new Intent(CMDListActivity.this, CMDJumpHereActivity.class);
+							intent.putExtra("CMDCode", currentCMD + "");
+							intent.putExtra("result", result);
+							startActivity(intent);
+						} else {//数据校验出错的情况
+							runOnUiThread(new Runnable() {
+								@Override
+								public void run() {
+									Toast.makeText(CMDListActivity.this, "响应体不完整或数据校验失败", Toast.LENGTH_SHORT).show();
+								}
+							});
 						}
-					});
+					} else {//无数据的情况
+						runOnUiThread(new Runnable() {
+							@Override
+							public void run() {
+								Toast.makeText(CMDListActivity.this, "响应超时", Toast.LENGTH_SHORT).show();
+							}
+						});
+					}
+
+					if (dialog.isShowing()) {
+						dialog.dismiss();
+					}
 					currentCMD = (byte) 0xFF;//还原当前命令
-					timeOut = TIME_OUT;
+					responseBuffer = new byte[0];
 				}
-			}
+			}//end run
 		}, 1000, 1000);
 
 	}
@@ -266,113 +277,38 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 	 * @param recive
 	 */
 	private void receiveDownloadCMD(byte[] recive) {
-		if (currentCMD == Head.CMD_REQUEST_DOWNLOAD_PACKAGE) {
-			BleMessage bleMessage = new BleMessage();
-			DownloadPackageResponse downloadPackageResponse = (DownloadPackageResponse) bleMessage.decodeMessage(recive);
-			if (downloadPackageResponse != null) {
-				// 拆分成 20B 的包发送
-				writeMsg(ToolsUtils.getFileBlock(recive, downloadPackageResponse.getStatrIndex(),
-						downloadPackageResponse.getEndIndex()), mWriteCharacteristic, mBluetoothLeService);
-			}
-		} else if (currentCMD == Head.CMD_PACKAGE_DOWNLOAD_SUCCESSFULLY) {//下载成功跳转
-			BleMessage bleMessage = new BleMessage();
-			DownloadSuccessfullyResponse downloadSuccessfullyResponse = (DownloadSuccessfullyResponse) bleMessage.decodeMessage(recive);
-			if (downloadSuccessfullyResponse != null) {
-				String result = downloadSuccessfullyResponse.toString();
-				Intent intent = new Intent(this, CMDJumpHereActivity.class);
-				intent.putExtra("CMDCode", currentCMD);
-				intent.putExtra("result", result);
-				startActivity(intent);
-			} else {
-				Toast.makeText(CMDListActivity.this, "响应体不完整或数据校验失败", Toast.LENGTH_SHORT).show();
-			}
-		}
-
-	}
-
-	private byte[] receiveDataBuffer(byte[] recive){
-		if (currentCMD != (byte) 0xFF) {//请求命令还在生效（1 超过五秒失效 2 数据接受完整失效）
-			if (lastTime != 0) {
-				if (System.currentTimeMillis() - lastTime <= MAX_INTERVAL) {//未接收完毕
-					Log.e("jcs_receive", "单次收到的数据: " + Arrays.toString(recive));
-					responseTemp = ToolsUtils.concatAll(responseTemp, recive);
-					lastTime = System.currentTimeMillis();
-				} else {//接收完毕
-					//在此处理数据
-					BaseResponseBody responseBody = new BleMessage().decodeMessage(recive);
-					if (responseBody != null) {
-						String result = responseBody.toString();
-						Intent intent = new Intent(this, CMDJumpHereActivity.class);
-						intent.putExtra("CMDCode", currentCMD);
-						intent.putExtra("result", result);
-						startActivity(intent);
-						currentCMD = (byte) 0xFF;
-						lastTime = 0;
-						if (dialog.isShowing()) {
-							dialog.dismiss();//接收完成取消弹窗
-						}
-					} else {
-						Toast.makeText(CMDListActivity.this, "响应体不完整或数据校验失败", Toast.LENGTH_SHORT).show();
-					}
+		if (recive.length >= 8) {//长度够的话先获取到CMD指令
+			currentCMD = recive[1];//获取响应包里的指令类型
+			if (currentCMD == Head.CMD_REQUEST_DOWNLOAD_PACKAGE) {//解析完响应体就发送包
+				BleMessage bleMessage = new BleMessage();
+				DownloadPackageResponse downloadPackageResponse = (DownloadPackageResponse) bleMessage.decodeMessage(recive);
+				if (downloadPackageResponse != null && fileblocks != null) {
+					int startIndex = downloadPackageResponse.getStatrIndex();
+					int endIndex = downloadPackageResponse.getEndIndex();
+					//进度显示
+					btn_dis_connect.setText(btn_dis_connect.getText().toString()+ToolsUtils.getPercentage(fileblocks,endIndex)+"");
+					// 拆分成 20B 的包发送
+					writeMsg(ToolsUtils.getFileBlock(fileblocks, startIndex, endIndex), mWriteCharacteristic, mBluetoothLeService);
 				}
-			} else {
-				responseTemp = ToolsUtils.concatAll(responseTemp, recive);
-				Log.e("jcs_receive", "单次收到的数据: " + Arrays.toString(recive));
-				lastTime = System.currentTimeMillis();
-			}
-		} else {//该条命令已失效
-			Toast.makeText(CMDListActivity.this, "请求命令已失效，请重新发送！", Toast.LENGTH_SHORT).show();
-			responseTemp = new byte[0];
-			currentCMD = (byte) 0xFF;
-			lastTime = 0;
-		}
-		return responseTemp;
-	}
-	/**
-	 * 回调数据处理部分，接收普通指令数据
-	 * 数据包大小限制20byte,分包接收两条数据间隔1秒视为数据接收完毕
-	 * 超时或者接收数据完整后将请求命令设为失效 (byte)0xFF
-	 *
-	 * @param recive
-	 */
-	private void receiveData(byte[] recive) {
-		if (currentCMD != (byte) 0xFF) {//请求命令还在生效（1 超过五秒失效 2 数据接受完整失效）
-			if (lastTime != 0) {
-				if (System.currentTimeMillis() - lastTime <= MAX_INTERVAL) {//未接收完毕
-					Log.e("jcs_receive", "单次收到的数据: " + Arrays.toString(recive));
-					responseTemp = ToolsUtils.concatAll(responseTemp, recive);
-					lastTime = System.currentTimeMillis();
-				} else {//接收完毕
-					//在此处理数据
-					BaseResponseBody responseBody = new BleMessage().decodeMessage(recive);
-					if (responseBody != null) {
-						String result = responseBody.toString();
-						Intent intent = new Intent(this, CMDJumpHereActivity.class);
-						intent.putExtra("CMDCode", currentCMD);
-						intent.putExtra("result", result);
-						startActivity(intent);
-						currentCMD = (byte) 0xFF;
-						lastTime = 0;
-						if (dialog.isShowing()) {
-							dialog.dismiss();//接收完成取消弹窗
-						}
-					} else {
-						Toast.makeText(CMDListActivity.this, "响应体不完整或数据校验失败", Toast.LENGTH_SHORT).show();
-					}
+			} else if (currentCMD == Head.CMD_PACKAGE_DOWNLOAD_SUCCESSFULLY) {
+				isDownloadding=false;
+				BleMessage bleMessage = new BleMessage();
+				DownloadSuccessfullyResponse downloadSuccessfullyResponse = (DownloadSuccessfullyResponse) bleMessage.decodeMessage(recive);
+				if (downloadSuccessfullyResponse != null) {
+					String result = downloadSuccessfullyResponse.toString();
+					Intent intent = new Intent(this, CMDJumpHereActivity.class);
+					intent.putExtra("CMDCode", currentCMD);
+					intent.putExtra("result", result);
+					startActivity(intent);
+				} else {
+					Toast.makeText(CMDListActivity.this, "响应体不完整或数据校验失败", Toast.LENGTH_SHORT).show();
 				}
-			} else {
-				responseTemp = ToolsUtils.concatAll(responseTemp, recive);
-				Log.e("jcs_receive", "单次收到的数据: " + Arrays.toString(recive));
-				lastTime = System.currentTimeMillis();
 			}
-		} else {//该条命令已失效
-			Toast.makeText(CMDListActivity.this, "请求命令已失效，请重新发送！", Toast.LENGTH_SHORT).show();
-			responseTemp = new byte[0];
-			currentCMD = (byte) 0xFF;
-			lastTime = 0;
 		}
 
+
 	}
+
 
 	//------------ 以下是蓝牙通讯部分 ----------
 	private final BroadcastReceiver mGattUpdateReceiver = new BroadcastReceiver() {
@@ -395,11 +331,15 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 				Log.e(TAG, "onReceive: 开始获取服务和特征值……");
 			} else if (BluetoothLeService.ACTION_DATA_AVAILABLE.equals(action)) {
 				byte[] recive = intent.getByteArrayExtra(BluetoothLeService.EXTRA_DATA);
-				recive=new byte[]{-86, -73, 0, 0, 23, 0, 0, -5, -15, 3, -25, 3, 4, 122, -100, 0, -12, 1, 61, -59, 52, 89, -118, -59, 52, 89, 77, 0, 0, 0, 10};
 				//响应数据处理部分
 				if (currentCMD != Head.CMD_REQUEST_DOWNLOAD_PACKAGE || currentCMD != Head.CMD_PACKAGE_DOWNLOAD_SUCCESSFULLY) {
-					receiveData(recive);
+					if (isTiming) { //只有在计时器走的时候才接收数据
+						responseBuffer = ToolsUtils.concatAll(responseBuffer, recive);
+						System.out.println("***********");
+						System.out.println(Arrays.toString(responseBuffer));
+					}
 				} else {
+					//外围设备请求体小于20B不用分包
 					receiveDownloadCMD(recive);
 				}
 
@@ -562,6 +502,7 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 				showSetGunIdDialog(cmd, "累计电量", builder, inflater, cumulativeHead, cumulativeRequest);
 				break;
 			case Head.CMD_START_REMOTE_UPGRADE:
+				fileblocks=null;
 				Head remoteHead = new Head(Head.CMD_START_REMOTE_UPGRADE);
 				RemoteUpgradeRequest remoteRequest = new RemoteUpgradeRequest();
 				showRemoteDialog(cmd, "远程升级", builder, inflater, remoteHead, remoteRequest);
@@ -619,6 +560,7 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 					remoteRequest.setSubsectionNum(subsectionNum);
 					remoteRequest.setSoftVsersion(softVsersion);
 					sendMsg(cmd, bleMessage.encodeMessage(remoteHead, remoteRequest));
+					isDownloadding=true;
 				} else {
 					Toast.makeText(CMDListActivity.this, "文件获取失败", Toast.LENGTH_SHORT).show();
 				}
@@ -720,7 +662,7 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 				String temp = s.toString();
 				if (s.length() != 0) {
 					if (Integer.parseInt(temp) > 255) {
-						temp=255+"";
+						temp = 255 + "";
 						editText.setText("255");
 					}
 				}
@@ -1051,12 +993,12 @@ public class CMDListActivity extends Activity implements CMDListAdapter.CmdItemC
 			case R.id.btn_dis_connect:
 				btn_dis_connect.setVisibility(View.GONE);
 				btn_connect.setVisibility(View.VISIBLE);
-				mBluetoothLeService.connect(mDeviceAddress);
+//				mBluetoothLeService.connect(mDeviceAddress);
 				break;
 			case R.id.btn_connect:
 				btn_dis_connect.setVisibility(View.VISIBLE);
 				btn_connect.setVisibility(View.GONE);
-				mBluetoothLeService.disconnect();
+//				mBluetoothLeService.disconnect();
 				break;
 		}
 	}

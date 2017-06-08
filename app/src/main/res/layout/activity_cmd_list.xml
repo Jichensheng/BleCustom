@@ -11,7 +11,7 @@
         android:layout_marginRight="20dp"
         android:layout_marginTop="10dp"
         android:background="#d6d6d6"
-        android:text="点击连接"
+        android:text="已连接上"
         android:textColor="#7c7c7c"
         android:textSize="17sp" />
     <Button
@@ -22,7 +22,7 @@
         android:layout_marginRight="20dp"
         android:layout_marginTop="10dp"
         android:background="#00a143"
-        android:text="点击断开"
+        android:text="未连接"
         android:textColor="#ffffff"
         android:visibility="gone"
         android:textSize="17sp" />

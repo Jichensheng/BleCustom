@@ -65,7 +65,8 @@ public class ToolsUtils {
 
 	/**
 	 * 将32位的long变byte[]数组（低位在前高位在后）
-	 *	0xffffffff
+	 * 0xffffffff
+	 *
 	 * @param res
 	 * @return
 	 */
@@ -188,16 +189,17 @@ public class ToolsUtils {
 
 	/**
 	 * 将InputStream转换成byte数组
-	 *@param file
-	 * @param in InputStream
+	 *
+	 * @param file
+	 * @param in   InputStream
 	 * @return byte[]
 	 * @throws IOException
 	 */
 	public static byte[] inputStreamTOByte(File file, InputStream in) throws IOException {
-		double size=FileUtils.getFileOrFilesSize(file,1);
-		if (size>=MAX_FILE_SIZE) {
+		double size = FileUtils.getFileOrFilesSize(file, 1);
+		if (size >= MAX_FILE_SIZE) {
 			return new byte[0];
-		}else{
+		} else {
 			ByteArrayOutputStream outStream = new ByteArrayOutputStream();
 			byte[] data = new byte[(int) size];
 			int count = -1;
@@ -212,13 +214,32 @@ public class ToolsUtils {
 
 	/**
 	 * CRC32
+	 *
 	 * @param file
 	 * @return
 	 */
-	public static byte[] fileCRC32(byte[] file){
-		CRC32 crc32=new CRC32();
+	public static byte[] fileCRC32(byte[] file) {
+		CRC32 crc32 = new CRC32();
 		crc32.update(file);
 		return longToByte4(crc32.getValue());
-	};
+	}
 
+	/**
+	 * 适合单个byte转成16进制字符串
+	 *
+	 * @param s
+	 * @return
+	 */
+	public static String byteStringToHex(String s) {
+		if (s.length() != 0) {
+			int temp = Integer.parseInt(s) >= 0 ? Integer.parseInt(s) : (256 + Integer.parseInt(s));
+			String hex = s.length() != 0 ? Integer.toHexString(temp) : "0";
+			return " 0x" + (hex.length() == 1 ? "0" + hex.toUpperCase() : hex.toUpperCase());
+		} else return "0x00";
+	}
+
+	public static String getPercentage(byte[] fileblocks, int endIndex) {
+		int fileLength = fileblocks.length;
+		return String.format("%.2f",100 * (((float) endIndex) / fileLength))+"%";
+	}
 }

@@ -33,6 +33,7 @@
         />
         <activity
             android:screenOrientation="portrait"
+            android:theme="@style/Theme.AppCompat.Light"
             android:name=".activity.CMDJumpHereActivity"/>
         <activity
             android:screenOrientation="portrait"
