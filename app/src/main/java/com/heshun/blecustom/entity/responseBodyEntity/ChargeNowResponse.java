@@ -43,8 +43,8 @@ public class ChargeNowResponse extends BaseResponseBody {
 
 	@Override
 	public String toString() {
-		return "ChargeNowResponse{" +
-				"setResult='" + setResult + '\'' +
+		return "立即充电响应体{\n" +
+				"结果='" + setResult +"\n" +
 				'}';
 	}
 }

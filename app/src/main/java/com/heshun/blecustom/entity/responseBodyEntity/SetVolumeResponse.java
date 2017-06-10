@@ -42,8 +42,8 @@ public class SetVolumeResponse extends BaseResponseBody {
 
 	@Override
 	public String toString() {
-		return "SetVolumeResponse{" +
-				"setResult='" + setResult + '\'' +
+		return "音量设置响应体{\n" +
+				"设置结果='" + setResult +"\n" +
 				'}';
 	}
 }

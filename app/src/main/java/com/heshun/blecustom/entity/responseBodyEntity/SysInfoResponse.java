@@ -233,21 +233,21 @@ public class SysInfoResponse extends BaseResponseBody {
 
 	@Override
 	public String toString() {
-		return "SysInfoResponse{" +
-				"pileID='" + pileID + '\'' +
-				", pileType='" + pileType + '\'' +
-				", pileSupplier=" + pileSupplier +
-				", magicNumber='" + magicNumber + '\'' +
-				", chargeMode='" + chargeMode + '\'' +
-				", volume=" + volume +
-				", pileTime='" + pileTime + '\'' +
-				", length=" + length +
-				", protocolVersion='" + protocolVersion + '\'' +
-				", softVsersion='" + softVsersion + '\'' +
-				", softModel='" + softModel + '\'' +
-				", TBD='" + TBD + '\'' +
-				", startTime='" + startTime + '\'' +
-				", endTime='" + endTime + '\'' +
+		return "系统信息响应体{\n" +
+				"充电桩号=" + pileID +
+				"\n桩类型=" + pileType +
+				"\n厂商=" + pileSupplier +
+				"\nmagic Number='" + magicNumber +
+				"\n充电模式=" + chargeMode +
+				"\n音量大小=" + volume +
+				"\n充电桩时间=" + pileTime +
+				"\n枪+状态的长度=" + length +
+				"\n通讯协议版本号=" + protocolVersion +
+				"\n软件版本号=" + softVsersion +
+				"\n嵌入式软件型号=" + softModel +
+				"\nTBD=" + TBD +
+				"\n当前模式设置时间开始时间='" + startTime +
+				"\n当前模式设置时间结束时间='" + endTime +"\n" +
 				'}';
 	}
 

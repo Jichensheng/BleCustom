@@ -240,6 +240,8 @@ public class ToolsUtils {
 
 	public static String getPercentage(byte[] fileblocks, int endIndex) {
 		int fileLength = fileblocks.length;
-		return String.format("%.2f",100 * (((float) endIndex) / fileLength))+"%";
+		float percentage = ((float) endIndex) / fileLength;
+		percentage = percentage >= 1 ? 1 : percentage;
+		return String.format("%.2f", 100 * percentage) + "%";
 	}
 }

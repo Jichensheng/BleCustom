@@ -37,6 +37,7 @@ public class BleMessage {
 	 */
 	public byte[] encodeMessage(Head head, BaseRequestBody body) {
 		head.setBodyLength((short)( body.getRequestBodyArray().length));
+		System.out.println("body长度"+(short)( body.getRequestBodyArray().length)+"转换前长度"+body.getRequestBodyArray().length);
 		head.setCheckSum(ToolsUtils.checkSum(head, body.getRequestBodyArray()));//再此设置checksum
 		return ToolsUtils.concatAll(head.getHeadArray(), body.getRequestBodyArray());
 	}

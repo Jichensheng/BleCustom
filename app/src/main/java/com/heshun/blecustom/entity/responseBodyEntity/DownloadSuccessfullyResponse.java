@@ -30,4 +30,11 @@ public class DownloadSuccessfullyResponse extends BaseResponseBody{
 	public void setSucc(boolean succ) {
 		isSucc = succ;
 	}
+
+	@Override
+	public String toString() {
+		return "下载成功响应体 { \n" +
+				"是否成功=" + isSucc +"\n" +
+				'}';
+	}
 }

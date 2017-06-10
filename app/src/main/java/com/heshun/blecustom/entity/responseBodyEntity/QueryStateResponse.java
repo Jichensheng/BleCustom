@@ -152,15 +152,15 @@ public class QueryStateResponse extends BaseResponseBody {
 
 	@Override
 	public String toString() {
-		return "QueryStateResponse{" +
-				"id=" + id +
-				", status=" + status +
-				", serialNumber=" + serialNumber +
-				", quantityOfElectricity=" + quantityOfElectricity +
-				", voltage=" + voltage +
-				", electricCurrent=" + electricCurrent +
-				", duration=" + duration +
-				", faultDescription='" + faultDescription + '\'' +
+		return "查询状态{\n" +
+				"端口号=" + id +
+				"\n状态=" + status +
+				"\n流水号=" + serialNumber +
+				"\n电量=" + quantityOfElectricity +
+				"\n电压=" + voltage +
+				"\n电流=" + electricCurrent +
+				"\n时长=" + duration +
+				"\n失败描述='" + faultDescription +"\n" +
 				'}';
 	}
 }

@@ -41,8 +41,8 @@ public class SetChargeModeResponse extends BaseResponseBody {
 
 	@Override
 	public String toString() {
-		return "SetChargeModeResponse{" +
-				"setResult='" + setResult + '\'' +
+		return "设置充电模式 {\n" +
+				"设置结果='" + setResult +"\n" +
 				'}';
 	}
 }

@@ -46,9 +46,9 @@ public class CumulativeChargeResponse extends BaseResponseBody {
 
 	@Override
 	public String toString() {
-		return "CumulativeChargeResponse{" +
-				"quantityOfElectricity=" + quantityOfElectricity +
-				", id=" + id +
+		return "累计电量响应体{\n" +
+				"累计电量=" + quantityOfElectricity +
+				"\n枪编号=" + id +"\n" +
 				'}';
 	}
 }

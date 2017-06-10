@@ -1,7 +1,6 @@
 package com.heshun.blecustom.entity.responseBodyEntity;
 
 import com.heshun.blecustom.base.BaseResponseBody;
-import com.heshun.blecustom.tools.ByteUtils;
 import com.heshun.blecustom.tools.ToolsUtils;
 
 import java.util.Arrays;
@@ -21,7 +20,7 @@ public class StopChargeResponse extends BaseResponseBody {
 
 	public void decodeBody(byte[] bodyArray) {
 		if (bodyArray.length >= 4) {
-			setTime(ToolsUtils.byteToSecondTime(ByteUtils.byteReverse(Arrays.copyOfRange(bodyArray, 0, 4))));
+			setTime(ToolsUtils.byteToSecondTime(Arrays.copyOfRange(bodyArray, 0, 4)));
 		} else {
 			setResponseMsg("响应体长度不足");
 		}
@@ -37,8 +36,8 @@ public class StopChargeResponse extends BaseResponseBody {
 
 	@Override
 	public String toString() {
-		return "StopChargeResponse{" +
-				"time='" + time + '\'' +
+		return "停止充电响应体{\n" +
+				"时间戳='" + time +"\n" +
 				'}';
 	}
 }

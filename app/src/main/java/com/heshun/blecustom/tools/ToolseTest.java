@@ -18,6 +18,7 @@ public class ToolseTest {
 	}
 
 	public static void main(String[] args) {
+		System.out.println(Integer.toBinaryString(0xabcd|0xff));
 		//2017-06-05 10:44:26
 		String time = ToolsUtils.byteToSecondTime(new byte[]{-118, -59, 52, 89});
 		System.out.println(time);
@@ -29,5 +30,18 @@ public class ToolseTest {
 		}
 
 		System.out.println("\n"+ToolsUtils.getPercentage(DataSimulation.getHistoryData(),5));
+
+		System.out.println(Arrays.toString(int2byte(256)));
+
+		System.out.println(Integer.toBinaryString(256));
+		System.out.println(ToolsUtils.byte4ToInt(ToolsUtils.intToByte4(-0)));
+	}
+	public static byte[] int2byte(int res) {
+		byte[] targets = new byte[4];
+		targets[0] = (byte) (res & 0xff);// 最低位
+		targets[1] = (byte) ((res >> 8) & 0xff);// 次低位
+		targets[2] = (byte) ((res >> 16) & 0xff);// 次高位
+		targets[3] = (byte) (res >>> 24);// 最高位,无符号右移。
+		return targets;
 	}
 }

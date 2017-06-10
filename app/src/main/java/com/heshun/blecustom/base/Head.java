@@ -93,6 +93,13 @@ public class Head {
 		this(Head.CMD_TYPE_REQUEST,CMD, Head.STATUSCODE_NORMAL, (byte) 0x00, (short) 0x00);
 	}
 
+	/**
+	 * 快速初始化请求head
+	 * @param CMD
+	 */
+	public Head(byte cmdType,byte CMD) {
+		this(cmdType,CMD, Head.STATUSCODE_NORMAL, (byte) 0x00, (short) 0x00);
+	}
 	public byte getCheckSum() {
 		return checkSum;
 	}

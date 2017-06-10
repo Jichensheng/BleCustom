@@ -109,13 +109,13 @@ public class ChargeHistoryResponse extends BaseResponseBody  {
 	public String toString() {
 		return "充电历史记录响应体 {\n" +
 				"Body长度=" + bodyLength +
-				",\n 订单数量=" + orderQuantity +
-				",\n 流水号=" + orderId +
-				",\n 充电电量=" + quantityOfElectricity +
-				",\n 开始时间='" + startTime + '\'' +
-				",\n 结束时间='" + endTime + '\'' +
-				",\n 充电时长=" + duration +
-				",\n 枪编号=" + id +"\n" +
+				"\n 订单数量=" + orderQuantity +
+				"\n 流水号=" + orderId +
+				"\n 充电电量=" + quantityOfElectricity +
+				"\n 开始时间='" + startTime +
+				"\n 结束时间='" + endTime +
+				"\n 充电时长=" + duration +
+				"\n 枪编号=" + id +"\n" +
 				'}';
 	}
 }

@@ -3,6 +3,7 @@ package com.heshun.blecustom.entity.responseBodyEntity;
 
 import com.heshun.blecustom.base.BaseResponseBody;
 import com.heshun.blecustom.tools.ByteUtils;
+import com.heshun.blecustom.tools.ToolsUtils;
 
 /**
  * 时间同步响应体
@@ -35,8 +36,8 @@ public class TimeSyncResponse extends BaseResponseBody {
 
 	@Override
 	public String toString() {
-		return "TimeSyncResponse{" +
-				"time=" + time +
+		return "时间同步响应体 {\n" +
+				"时间=" + ToolsUtils.byteToSecondTime(ToolsUtils.intToByte4(time)) +"\n" +
 				'}';
 	}
 }

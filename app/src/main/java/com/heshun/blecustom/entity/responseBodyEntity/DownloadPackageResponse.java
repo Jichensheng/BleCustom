@@ -46,4 +46,12 @@ public class DownloadPackageResponse extends BaseResponseBody {
 	public void setEndIndex(int endIndex) {
 		this.endIndex = endIndex;
 	}
+
+	@Override
+	public String toString() {
+		return "下载包响应体{\n" +
+				"起始位置=" + statrIndex +
+				"\n结束位置=" + endIndex +"\n" +
+				'}';
+	}
 }
